@@ -11,7 +11,8 @@ monitor = ArkhamMonitor(api_key=API_KEY)
 # --- 2. Наполнение кеша ---
 # Первоначальный запрос для получения данных и наполнения кешей адресов/токенов
 # Используем широкие фильтры (5M USD, 24ч), запрашиваем до 1000 транзакций
-initial_df = monitor.get_transactions(min_usd=5000000, lookback='24h', limit=1000)
+monitor.set_filters(min_usd=5000000, lookback='24h')
+initial_df = monitor.get_transactions(limit=1000)
 
 # --- 3. Получение списков имен из кеша ---
 all_known_names = monitor.address_cache.get_all_names()
