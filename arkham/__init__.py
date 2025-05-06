@@ -1,1 +1,1 @@
-# This file makes Python treat the directory `arkham` as a package. 
+# Этот файл делает arkham пакетом Python (можно оставить пустым) 
