@@ -47,17 +47,16 @@ ARKHAM_API_KEY="ВАШ_API_КЛЮЧ_ЗДЕСЬ"
 
 ## Быстрый старт и Примеры использования
 
-Вот базовый пример того, как использовать библиотеку, включая работу с кешем для фильтрации:
+Вот базовый пример того, как использовать библиотеку, демонстрирующий основные сценарии работы, включая фильтрацию по CEX и DEX:
 
 ```python
 import os
 import pandas as pd
-import time 
 from dotenv import load_dotenv
 from arkham.arkham_monitor import ArkhamMonitor
 
 # --- 1. Инициализация ---
-load_dotenv() 
+load_dotenv()
 API_KEY = os.getenv("ARKHAM_API_KEY")
 
 if not API_KEY:
@@ -65,69 +64,82 @@ if not API_KEY:
 
 monitor = ArkhamMonitor(api_key=API_KEY)
 
-# --- 2. Инициализация/наполнение кеша ---
-# Это важный шаг, если вы планируете использовать фильтры по именам сущностей или символам токенов.
-print("Инициализация кеша...")
-if monitor.initialize_cache(lookback='6h', usd_gte=500000, limit=50): # Запрашиваем недавние крупные транзакции для наполнения кеша
-    print(f"Кеш успешно инициализирован.")
+# --- 2. Наполнение кеша ---
+# Первоначальный запрос для получения данных и наполнения кешей адресов/токенов.
+# Используем широкие фильтры (например, 5M USD, за последние 24 часа), запрашиваем до 1000 транзакций.
+# Это важный шаг для эффективной работы последующих фильтров по именам/символам.
+print("Этап 2: Наполнение кеша транзакциями (5M USD, 24ч, до 1000)...")
+monitor.set_filters(min_usd=5000000, lookback='24h')
+initial_df = monitor.get_transactions(limit=1000)
+if not initial_df.empty:
+    print(f"  Найдено {len(initial_df)} транзакций для наполнения кеша.")
+    # print(initial_df.head()) # Раскомментируйте, чтобы посмотреть транзакции
 else:
-    print("Ошибка при инициализации кеша.")
+    print("  Не найдено транзакций для первоначального наполнения кеша.")
 
-# --- 3. Получение известных имен и символов из кеша для использования в фильтрах ---
-known_cex_names = [name for name in monitor.get_known_address_names() if "Cex" in name and "Binance" in name] # Пример: ищем Binance CEX
-known_token_symbols = monitor.get_known_token_symbols() # Все известные символы
-
-print(f"\nИзвестные имена CEX, содержащие 'Binance' (из кеша): {known_cex_names}")
-if 'USDT' in known_token_symbols and 'USDC' in known_token_symbols:
-    print("Символы USDT и USDC присутствуют в кеше.")
-    target_tokens = ['USDT', 'USDC']
+# --- 3. Получение списков имен из кеша ---
+# Эти имена можно использовать для более точной фильтрации
+all_known_names = monitor.get_known_address_names() # Используем метод ArkhamMonitor
+if all_known_names:
+    print(f"\nЭтап 3: Из кеша загружено {len(all_known_names)} уникальных имен/адресов.")
+    # print(f"  Некоторые известные имена (первые 5): {all_known_names[:5]}") # Раскомментируйте для просмотра
 else:
-    print("USDT или USDC не найдены в кеше, фильтр по ним может быть неэффективен. Будут использованы все доступные токены.")
-    target_tokens = None # Или пустой список, в зависимости от желаемого поведения
+    print("\nЭтап 3: Кеш имен пуст. Возможно, первоначальный запрос не вернул транзакций.")
 
-# --- 4. Установка фильтров с использованием данных из кеша ---
-print("\nУстановка фильтров...")
-if known_cex_names and target_tokens:
+# --- 4. Демонстрация фильтра "В CEX" ---
+print("\nЭтап 4: Демонстрация фильтра 'В CEX'")
+# Находим все имена сущностей из кеша, содержащие "Cex"
+cex_names = [name for name in all_known_names if "Cex" in name]
+# Выбираем целевые токены (убедитесь, что они есть в кеше через monitor.get_known_token_symbols() для лучшей фильтрации)
+target_tokens_cex = ['BTC', 'USDT', 'USDC'] 
+print(f"  Используем найденные CEX имена (пример): {cex_names[:3] if cex_names else 'Нет CEX имен в кеше'}")
+print(f"  Используем целевые токены: {target_tokens_cex}")
+
+if cex_names:
+    # Устанавливаем фильтры: куда = найденные Cex, токены = BTC/USDT/USDC, 5M USD, 24ч
     monitor.set_filters(
-        min_usd=100000, 
-        lookback='1h', 
-        token_symbols=target_tokens, # Используем символы, проверенные на наличие в кеше
-        to_address_names=known_cex_names # Используем имена, полученные из кеша
+        min_usd=5000000,
+        lookback='24h',
+        token_symbols=target_tokens_cex,
+        to_address_names=cex_names
     )
-    print(f"Фильтры установлены: >100k USD, за 1 час, токены: {target_tokens}, на адреса: {known_cex_names}")
+    # Получаем отфильтрованные транзакции (до 100)
+    df_to_cex = monitor.get_transactions(limit=100)
+    if not df_to_cex.empty:
+        print(f"  Найдено транзакций 'В CEX': {len(df_to_cex)}")
+        print(df_to_cex.head())
+    else:
+        print("  Транзакции 'В CEX' по заданным фильтрам не найдены.")
 else:
-    monitor.set_filters(min_usd=100000, lookback='1h') # Общий фильтр, если нужные имена/токены не найдены
-    print("Фильтры установлены: >100k USD, за 1 час (специфичные CEX/токены не найдены в кеше для фильтрации)")
+    print("  Не найдено имен CEX в кеше для демонстрации фильтра 'В CEX'.")
 
 
-# --- 5. Получение транзакций ---
-print("\nПолучение транзакций по фильтрам...")
-df_transactions = monitor.get_transactions(limit=5) 
+# --- 5. Демонстрация фильтра "Из DEX" ---
+print("\nЭтап 5: Демонстрация фильтра 'Из DEX'")
+# Находим все имена сущностей из кеша, содержащие "Dex"
+dex_names = [name for name in all_known_names if "Dex" in name]
+print(f"  Используем найденные DEX имена (пример): {dex_names[:3] if dex_names else 'Нет DEX имен в кеше'}")
 
-if not df_transactions.empty:
-    print(f"Найдено {len(df_transactions)} транзакций:")
-    print(df_transactions.head())
+if dex_names:
+    # Устанавливаем фильтры: откуда = найденные Dex, 5M USD, 24ч
+    monitor.set_filters(
+        min_usd=5000000,
+        lookback='24h',
+        from_address_names=dex_names
+    )
+    # Получаем отфильтрованные транзакции (до 100)
+    df_from_dex = monitor.get_transactions(limit=100)
+    if not df_from_dex.empty:
+        print(f"  Найдено транзакций 'Из DEX': {len(df_from_dex)}")
+        print(df_from_dex.head())
+    else:
+        print("  Транзакции 'Из DEX' по заданным фильтрам не найдены.")
 else:
-    print("Транзакции по заданным фильтрам не найдены.")
+    print("  Не найдено имен DEX в кеше для демонстрации фильтра 'Из DEX'.")
 
-# --- 6. Пример фонового мониторинга ---
-def my_transaction_callback(tx_data: dict):
-    print(f"\n[CALLBACK] Новая транзакция: {tx_data.get('USD')} USD, {tx_data.get('Символ')}")
-    print(f"    От: {tx_data.get('Откуда')}, Кому: {tx_data.get('Куда')}")
+print("\nПример завершен. Переменные df_to_cex и df_from_dex содержат результаты (если были найдены).")
 
-print("\nЗапуск фонового мониторинга на 25 секунд (интервал 10 сек)...")
-monitor.set_filters(min_usd=10000, lookback='10m', token_symbols=['ETH', 'WETH']) 
-monitor.start_background_monitoring(interval_seconds=10, callback=my_transaction_callback)
-
-try:
-    time.sleep(25) 
-except KeyboardInterrupt:
-    print("\nПрервано пользователем.")
-finally:
-    monitor.stop_background_monitoring()
-    print("Фоновый мониторинг завершен.")
-
-# Вы можете найти больше примеров в папке /examples вашего репозитория.
+# Вы можете найти этот и другие примеры в папке /examples вашего репозитория.
 ```
 
 ---
