@@ -1,7 +1,9 @@
 from .cache import AddressCache, TokenCache
 from .config import get_logger
+# import logging # <--- Удаляем или комментируем
 
 logger = get_logger(__name__)
+# logger.setLevel(logging.DEBUG) # <--- Удаляем или комментируем
 
 DEFAULT_LIMIT = 100 # Default limit for API requests
 
@@ -74,23 +76,24 @@ class TransactionFilter:
         
         # Note: Filtering by from/to names happens *after* fetching, so they aren't API params.
         # --- Attempt to add 'from' and 'to' parameters if IDs are known --- 
+        # Используем from/to вместо fromAddresses/toAddresses для строгой фильтрации
         if self._allowed_from_ids is not None:
             if self._allowed_from_ids:
-                # Используем fromAddresses вместо from
-                params['fromAddresses'] = ",".join(sorted(list(self._allowed_from_ids))).lower()
-                logger.debug(f"Добавляем параметр API 'fromAddresses': {params['fromAddresses'][:100]}...") # Log first 100 chars
+                # Используем 'from' вместо 'fromAddresses'
+                from_str = ",".join(sorted(list(self._allowed_from_ids)))
+                params['from'] = from_str
             else:
-                # If names were specified but no IDs found, we rely on post-filtering
-                logger.debug("Фильтр по 'Откуда' активен, но ID не найдены в кеше. Фильтрация будет после получения.")
+                # Этот случай означает: from_address_names были указаны, но не разрешились ни в какие ID.
+                logger.debug("Фильтр по 'Откуда' активен, но ID для указанных имен не найдены в кеше.")
                 
         if self._allowed_to_ids is not None:
             if self._allowed_to_ids:
-                # Используем toAddresses вместо to
-                params['toAddresses'] = ",".join(sorted(list(self._allowed_to_ids))).lower()
-                logger.debug(f"Добавляем параметр API 'toAddresses': {params['toAddresses'][:100]}...") # Log first 100 chars
+                # Используем 'to' вместо 'toAddresses'
+                to_str = ",".join(sorted(list(self._allowed_to_ids)))
+                params['to'] = to_str
             else:
-                # Rely on post-filtering
-                logger.debug("Фильтр по 'Куда' активен, но ID не найдены в кеше. Фильтрация будет после получения.")
+                # Этот случай означает: to_address_names были указаны, но не разрешились ни в какие ID.
+                logger.debug("Фильтр по 'Куда' активен, но ID для указанных имен не найдены в кеше.")
         # ------------------------------------------------------------------
         
         return params

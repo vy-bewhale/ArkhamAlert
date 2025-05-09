@@ -103,12 +103,12 @@ class DataProcessor:
         address_str = None
         entity_name = None
         label_name = None
-        entity_type_display = "" # We don't filter by type anymore, but keep for display name
+        entity_type_display = "" 
         is_real_name = False
-        chain_str = None # Keep chain for potential future use, though not displayed now
+        chain_str = None 
 
         if isinstance(addr_data, dict):
-            address_str = self._extract_address_from_obj(addr_data) # Use helper
+            address_str = self._extract_address_from_obj(addr_data) 
             chain_str = addr_data.get('chain')
             
             entity_data = addr_data.get('arkhamEntity')
@@ -121,18 +121,28 @@ class DataProcessor:
             label_data = addr_data.get('arkhamLabel')
             if isinstance(label_data, dict):
                 label_name = label_data.get('name')
-                if label_name: is_real_name = True # Label implies real name too
+                if label_name: is_real_name = True 
 
         elif isinstance(addr_data, str):
             address_str = addr_data
-            is_real_name = False # Just an address string isn't a "real" name
+            is_real_name = False
         
-        # Determine Identifier (usually the address string)
-        identifier = address_str if address_str else (entity_name or label_name) 
-        if not identifier:
-             return None, "N/A", False # Cannot identify
+        # --- Determine Identifier (ONLY the actual address string) ---
+        identifier = address_str # identifier - это ТОЛЬКО фактический адрес
 
-        # --- Generate Display Name (similar to original logic) --- 
+        # Если identifier (т.е. address_str) отсутствует, мы не можем использовать 
+        # entity_name или label_name в качестве идентификатора для фильтрации API.
+        # display_name все равно будет сформирован ниже для отображения.
+        # Вызов self.address_cache.update(None, display_name, ...) не добавит
+        # некорректные "ID" в _name_to_ids.
+        
+        # Эта проверка, по сути, не нужна, если identifier = address_str, 
+        # т.к. AddressCache.update() сам обработает None identifier.
+        # Но оставим для ясности, что если нет address_str, то identifier = None.
+        if not identifier: 
+            pass 
+
+        # --- Generate Display Name (логика остается прежней) --- 
         display_name = "N/A"
         if entity_name and label_name:
             display_name = f"{entity_name}{entity_type_display} - {label_name}"
@@ -141,16 +151,25 @@ class DataProcessor:
         elif label_name:
             display_name = label_name
         elif address_str:
-             # Create short address if no names available
             if len(address_str) > 10:
                  display_name = f"{address_str[:5]}...{address_str[-5:]}"
             else:
                  display_name = address_str
-        else: # Fallback if only identifier was non-address name
-             display_name = identifier 
-        # --- End Display Name Generation ---
+        else: 
+             # Эта ветка теперь менее вероятна, если identifier был только address_str.
+             # Однако, если entity_name или label_name существуют при отсутствии address_str,
+             # они все еще могут сформировать display_name.
+             # Если и их нет, display_name останется "N/A" или будет сформирован из identifier, который теперь None.
+             # Нужно убедиться, что display_name корректно обрабатывает None identifier.
+             # Исходная логика здесь была: display_name = identifier. Если identifier=None, display_name будет None.
+             # Это нужно проверить. Лучше явный "N/A", если все остальное None.
+             if entity_name: # Повторяем логику, но уже зная, что address_str is None
+                 display_name = f"{entity_name}{entity_type_display}"
+             elif label_name:
+                 display_name = label_name
+             # Если display_name все еще "N/A" и identifier (address_str) был None, то так и остается.
         
-        # Update the cache with the extracted info
+        # --- Update the cache with the extracted info ---
         self.address_cache.update(identifier, display_name, is_real_name)
         
         return identifier, display_name, is_real_name

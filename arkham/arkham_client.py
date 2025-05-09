@@ -38,7 +38,7 @@ class ArkhamClient:
                 return response.json()
             except json.JSONDecodeError as json_err:
                 logger.error(f"Ошибка декодирования JSON от Arkham API: {json_err}. Ответ: {response.text[:500]}")
-                raise ArkhamAPIError(f"JSON Decode Error: {json_err}") from json_err
+                raise ArkhamAPIError(message=f"JSON Decode Error: {json_err}", status_code=response.status_code if response else None) from json_err
 
         except requests.exceptions.HTTPError as http_err:
             status_code = http_err.response.status_code
@@ -46,20 +46,20 @@ class ArkhamClient:
             logger.error(f"HTTP ошибка {status_code} при запросе к {url}: {response_text}")
             
             if status_code == 401:
-                raise ArkhamAPIError("Ошибка авторизации (401 Unauthorized). Проверьте API ключ.") from http_err
+                raise ArkhamAPIError(message="Ошибка авторизации (401 Unauthorized). Проверьте API ключ.", status_code=status_code) from http_err
             elif status_code == 403:
                  # Basic rate limit check
                 if 'throttled' in response_text.lower() or 'rate limit' in response_text.lower():
-                    raise ArkhamAPIError("Превышен лимит запросов Arkham API (403 Forbidden/Throttled).") from http_err
-                raise ArkhamAPIError(f"Доступ запрещен (403 Forbidden). Ответ: {response_text}") from http_err
+                    raise ArkhamAPIError(message="Превышен лимит запросов Arkham API (403 Forbidden/Throttled).", status_code=status_code) from http_err
+                raise ArkhamAPIError(message=f"Доступ запрещен (403 Forbidden). Ответ: {response_text}", status_code=status_code) from http_err
             else:
                  # General HTTP error
-                raise ArkhamAPIError(f"HTTP Error: {status_code}. Ответ: {response_text}") from http_err
+                raise ArkhamAPIError(message=f"HTTP Error: {status_code}. Ответ: {response_text}", status_code=status_code) from http_err
 
         except requests.exceptions.RequestException as req_err:
             # Network errors, timeouts, etc.
             logger.error(f"Ошибка соединения с Arkham API ({url}): {req_err}")
-            raise ArkhamAPIError(f"Ошибка соединения: {req_err}") from req_err
+            raise ArkhamAPIError(message=f"Ошибка соединения: {req_err}", status_code=None) from req_err
 
     def get_transfers(self, params: dict | None = None):
         """Fetches transfers from the Arkham API.

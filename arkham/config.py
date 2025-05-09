@@ -27,4 +27,7 @@ class ArkhamError(Exception):
 
 class ArkhamAPIError(ArkhamError):
     """Exception for Arkham API specific errors."""
-    pass 
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.message = message # Сообщение об ошибке
+        self.status_code = status_code # HTTP статус код 
