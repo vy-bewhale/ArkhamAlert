@@ -151,7 +151,7 @@ print("\nПример завершен. Переменные df_to_cex и df_fro
 **Важно при работе с фильтрами:** Эффективность фильтрации по именам сущностей (`from_address_names`, `to_address_names`) и символам токенов (`token_symbols`) напрямую зависит от полноты внутреннего кеша библиотеки. Перед использованием этих параметров в `set_filters()`, рекомендуется:
 1.  Выполнить `initialize_cache()` для первоначального наполнения кеша.
 2.  Получить актуальные списки доступных для фильтрации имен и символов с помощью методов `get_known_address_names()` и `get_known_token_symbols()`.
-3.  Использовать в `set_filters()` только те имена и символы, которые присутствуют в кеше. Передача произвольных строк, отсутствующих в кеше, приведет к тому, что фильтрация по ним на стороне API Arkham не будет применена.
+3.  Использовать в `set_filters()` только те имена и символы, которые присутствуют в кеше. Передача произвольных строк, отсутствующих в кеше, приведет к тому, что фильтрация по ним на стороне API не будет применена.
 
 ### Класс `ArkhamMonitor`
 
@@ -258,6 +258,108 @@ from arkham.arkham_monitor import ArkhamMonitor
     *   `timeout` (`float`, опционально): Таймаут ожидания завершения (сек). По умолчанию: `5.0`.
 *   **Возвращает:**
     *   `None`
+
+## Управление состоянием кеша (Сериализация)
+
+Библиотека предоставляет возможность сохранять и загружать состояние внутренних кешей (`AddressCache` и `TokenCache`). Это может быть полезно для восстановления сессий в веб-приложениях или для сохранения состояния между запусками скриптов, чтобы избежать повторного наполнения кеша с нуля.
+
+В классах `AddressCache` и `TokenCache` для этого реализованы методы `get_state() -> dict` и `load_state(state: dict)`.
+
+Для удобства, в основном классе `ArkhamMonitor` добавлены следующие методы-обертки:
+
+**`get_full_cache_state(self) -> dict`**
+
+Возвращает сериализуемое состояние всех кешей (`AddressCache` и `TokenCache`) в виде словаря. Этот словарь можно затем сохранить (например, в формате JSON).
+
+*   **Возвращает:**
+    *   `dict`: Словарь, содержащий состояния кешей, например:
+        ```python
+        {
+            'address_cache': { ... состояние AddressCache ... },
+            'token_cache': { ... состояние TokenCache ... }
+        }
+        ```
+    *   Возвращает пустой словарь в случае ошибки или если кеши не инициализированы.
+
+**`load_full_cache_state(self, full_state: dict | None)`**
+
+Загружает состояние всех кешей из ранее сохраненного словаря. Это перезапишет текущее содержимое кешей.
+
+*   **Параметры:**
+    *   `full_state` (`dict | None`): Словарь, содержащий состояния `'address_cache'` и `'token_cache'`, полученный ранее с помощью `get_full_cache_state()`. Если `None` или пустой, кеши не будут изменены.
+*   **Возвращает:**
+    *   `None`
+
+### Пример сохранения и загрузки состояния кеша
+
+```python
+import os
+from dotenv import load_dotenv
+from arkham.arkham_monitor import ArkhamMonitor
+# import json # Для сохранения в файл (опционально)
+
+# --- 1. Инициализация и первоначальное наполнение кеша ---
+load_dotenv()
+API_KEY = os.getenv("ARKHAM_API_KEY")
+monitor1 = ArkhamMonitor(api_key=API_KEY)
+
+print("Наполняем кеш в первом экземпляре монитора...")
+# Пример: выполняем несколько запросов для наполнения кеша
+# В реальном приложении это может быть результатом работы пользователя
+monitor1.set_filters(min_usd=1000000, lookback='1h')
+monitor1.get_transactions(limit=50) # Первый запрос
+monitor1.set_filters(min_usd=500000, lookback='6h', token_symbols=['BTC'])
+monitor1.get_transactions(limit=50) # Второй запрос
+
+known_addresses_m1 = monitor1.get_known_address_names()
+known_tokens_m1 = monitor1.get_known_token_symbols()
+print(f"Имен в кеше адресов (monitor1): {len(known_addresses_m1)}")
+print(f"Символов в кеше токенов (monitor1): {len(known_tokens_m1)}")
+# if known_addresses_m1: print(f"  Пример имен: {known_addresses_m1[:3]}")
+
+# --- 2. Сохранение состояния кеша ---
+print("\nСохраняем состояние кешей...")
+cache_state_to_save = monitor1.get_full_cache_state()
+
+# Опционально: сохранение в JSON файл
+# file_path = 'arkham_cache_state.json'
+# with open(file_path, 'w', encoding='utf-8') as f:
+#     json.dump(cache_state_to_save, f, ensure_ascii=False, indent=4)
+# print(f"Состояние кешей сохранено в {file_path} (симуляция).")
+
+# --- 3. Создание нового экземпляра монитора и загрузка состояния ---
+print("\nСоздаем второй экземпляр монитора (monitor2)...")
+monitor2 = ArkhamMonitor(api_key=API_KEY) # Новый, кеши пустые
+
+print(f"Имен в кеше адресов (monitor2 до загрузки): {len(monitor2.get_known_address_names())}")
+print(f"Символов в кеше токенов (monitor2 до загрузки): {len(monitor2.get_known_token_symbols())}")
+
+print("Загружаем сохраненное состояние в monitor2...")
+monitor2.load_full_cache_state(cache_state_to_save)
+# Если сохраняли в файл:
+# with open(file_path, 'r', encoding='utf-8') as f:
+#     loaded_state_from_file = json.load(f)
+# monitor2.load_full_cache_state(loaded_state_from_file)
+
+print("Состояние кешей загружено в monitor2.")
+
+# --- 4. Проверка восстановленного кеша ---
+known_addresses_m2 = monitor2.get_known_address_names()
+known_tokens_m2 = monitor2.get_known_token_symbols()
+print(f"Имен в кеше адресов (monitor2 после загрузки): {len(known_addresses_m2)}")
+print(f"Символов в кеше токенов (monitor2 после загрузки): {len(known_tokens_m2)}")
+
+# Проверяем, что количество элементов совпадает
+assert len(known_addresses_m1) == len(known_addresses_m2), "Количество имен адресов не совпадает"
+assert len(known_tokens_m1) == len(known_tokens_m2), "Количество символов токенов не совпадает"
+
+# Опционально, более глубокая проверка, если нужно (например, сравнение самих списков)
+# assert sorted(known_addresses_m1) == sorted(known_addresses_m2)
+
+print("Проверка: кеш успешно восстановлен.")
+```
+
+Этот функционал позволяет эффективно управлять состоянием кеша, что особенно важно для приложений, требующих персистентности данных между сессиями или запусками.
 
 ### Пользовательские исключения
 

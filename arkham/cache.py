@@ -76,6 +76,30 @@ class AddressCache:
             all_ids.update(self.get_identifiers_by_name(name))
         return all_ids
 
+    def get_state(self) -> dict:
+        """Returns a serializable state of the cache."""
+        return {
+            'cache': self._cache.copy(),
+            'name_to_ids': {k: list(v) for k, v in self._name_to_ids.items()} # Convert sets to lists for JSON compatibility
+        }
+
+    def load_state(self, state: dict):
+        """Loads the cache state from a dictionary.
+        
+        Args:
+            state: A dictionary previously obtained from get_state().
+        """
+        self._cache = state.get('cache', {}).copy()
+        
+        self._name_to_ids = defaultdict(set) # Re-initialize
+        name_to_ids_data = state.get('name_to_ids', {})
+        for name, ids_iterable in name_to_ids_data.items():
+            # Ensure ids_iterable is converted to a set before updating/assigning
+            current_set = set()
+            if isinstance(ids_iterable, (list, set, tuple)): # common iterable types from JSON
+                current_set.update(ids_iterable)
+            self._name_to_ids[name] = current_set
+
 
 class TokenCache:
     """Manages caching of token IDs and symbols, including synonyms."""
@@ -159,4 +183,32 @@ class TokenCache:
     def get_symbol_to_ids_map(self) -> dict[str, set[str]]:
         """Returns a copy of the mapping from symbols to sets of token IDs."""
         # Return a copy to prevent external modification
-        return {sym: ids.copy() for sym, ids in self._symbol_to_ids.items() if ids} 
+        return {sym: ids.copy() for sym, ids in self._symbol_to_ids.items() if ids}
+
+    def get_state(self) -> dict:
+        """Returns a serializable state of the cache."""
+        return {
+            'id_to_symbol': self._id_to_symbol.copy(),
+            'symbol_to_ids': {k: list(v) for k, v in self._symbol_to_ids.items()} # Convert sets to lists for JSON compatibility
+        }
+
+    def load_state(self, state: dict):
+        """Loads the cache state from a dictionary.
+
+        Args:
+            state: A dictionary previously obtained from get_state().
+        """
+        self._id_to_symbol = state.get('id_to_symbol', {}).copy()
+        
+        # Re-initialize _symbol_to_ids and apply base synonym structure
+        self._symbol_to_ids = defaultdict(set)
+        self._update_synonyms() # Establishes base synonym structure (e.g., empty sets for normalized forms)
+        
+        loaded_symbol_map = state.get('symbol_to_ids', {})
+        for symbol_key, ids_iterable in loaded_symbol_map.items():
+            # This will override the empty sets from _update_synonyms if symbol_key matches,
+            # or add new entries if the symbol_key was not part of initial _token_synonyms.
+            current_set = set()
+            if isinstance(ids_iterable, (list, set, tuple)):
+                current_set.update(ids_iterable)
+            self._symbol_to_ids[symbol_key] = current_set 

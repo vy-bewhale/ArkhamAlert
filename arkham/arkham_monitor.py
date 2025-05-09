@@ -253,4 +253,60 @@ class ArkhamMonitor:
             logger.warning(f"Поток мониторинга не завершился за {timeout} сек.")
         else:
             logger.info("Поток мониторинга успешно завершен.")
-        self._monitor_thread = None 
+        self._monitor_thread = None
+
+    def get_full_cache_state(self) -> dict:
+        """
+        Returns a serializable state of all caches (address and token).
+        The state can be used later with load_full_cache_state to restore the caches.
+        """
+        if not self.address_cache or not self.token_cache:
+            # This should ideally not happen if __init__ ensures they are created
+            logger.warning("Кеши не инициализированы, невозможно получить состояние.")
+            return {}
+        try:
+            return {
+                'address_cache': self.address_cache.get_state(),
+                'token_cache': self.token_cache.get_state()
+            }
+        except Exception as e:
+            logger.exception(f"Ошибка при получении состояния кешей: {e}")
+            return {}
+
+    def load_full_cache_state(self, full_state: dict | None):
+        """
+        Loads the state of all caches from a previously saved state.
+        This will overwrite current cache contents.
+
+        Args:
+            full_state: A dictionary containing 'address_cache' and 'token_cache' states,
+                        as obtained from get_full_cache_state().
+                        If None or empty, caches might be cleared or not modified based on cache implementation.
+        """
+        if not full_state:
+            logger.info("Не предоставлено состояние для загрузки кешей. Кеши не изменены.")
+            return
+
+        if not self.address_cache or not self.token_cache:
+            logger.error("Экземпляры кешей отсутствуют в мониторе. Невозможно загрузить состояние.")
+            return
+
+        address_state = full_state.get('address_cache')
+        if address_state is not None: # Check for presence, even if it's an empty dict (for clearing)
+            try:
+                self.address_cache.load_state(address_state)
+                logger.info("Состояние кеша адресов успешно загружено.")
+            except Exception as e:
+                logger.exception(f"Ошибка при загрузке состояния кеша адресов: {e}")
+        else:
+            logger.info("Данные для кеша адресов не найдены в предоставленном состоянии.")
+
+        token_state = full_state.get('token_cache')
+        if token_state is not None: # Check for presence
+            try:
+                self.token_cache.load_state(token_state)
+                logger.info("Состояние кеша токенов успешно загружено.")
+            except Exception as e:
+                logger.exception(f"Ошибка при загрузке состояния кеша токенов: {e}")
+        else:
+            logger.info("Данные для кеша токенов не найдены в предоставленном состоянии.") 
