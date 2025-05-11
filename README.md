@@ -22,13 +22,13 @@
 
 **2. Установка последней версии напрямую из GitHub:**
    ```bash
-   pip install git+https://github.com/vy-bewhale/ArkhamAlert.git
+   pip install git+https://github.com/vy-bewhale/arkham_client.git
    ```
 
 **3. Для локальной разработки:**
    ```bash
-   git clone https://github.com/vy-bewhale/ArkhamAlert.git
-   cd ArkhamAlert
+   git clone https://github.com/vy-bewhale/arkham_client.git
+   cd arkham_client
    pip install -e .
    ```
 
