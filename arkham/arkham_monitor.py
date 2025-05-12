@@ -162,8 +162,17 @@ class ArkhamMonitor:
 
         # --- Create DataFrame (select columns for display) ---
         display_columns = ["Время", "Сеть", "Откуда", "Куда", "Символ", "Кол-во", "USD"]
+        # Добавляем колонку с хешем транзакции
+        if filtered_txs and '_txid' in filtered_txs[0]:
+            display_columns.append('TxID') 
+            # Переименовываем _txid в TxID для отображения
+            for tx in filtered_txs:
+                tx['TxID'] = tx.get('_txid', 'N/A')
+                
         # Create DF from the list of dicts, selecting only necessary columns
-        df = pd.DataFrame(filtered_txs)[display_columns]
+        # Убедимся, что выбираем только существующие колонки, особенно если TxID не добавилась
+        actual_columns = [col for col in display_columns if col in filtered_txs[0]] if filtered_txs else []
+        df = pd.DataFrame(filtered_txs)[actual_columns]
         return df
         # ------------------------------------------------------
 

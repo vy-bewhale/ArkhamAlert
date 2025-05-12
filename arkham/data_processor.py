@@ -1,6 +1,7 @@
 import datetime
 from decimal import Decimal, ROUND_HALF_UP
 import decimal as decimal_module
+import hashlib
 from .cache import AddressCache, TokenCache
 from .config import get_logger
 
@@ -226,11 +227,34 @@ class DataProcessor:
         # --- Format other fields --- 
         chain = tx.get('chain', 'N/A')
         # Decimals are usually not in /transfers, pass None
-        formatted_value = self._format_value(tx.get('unitValue'), None) 
+        raw_unit_value = tx.get('unitValue') # Получаем сырое значение
+        formatted_value = self._format_value(raw_unit_value, None) 
         usd_numeric = tx.get('historicalUSD') # Keep numeric for filtering
         formatted_usd = self._format_usd(usd_numeric)
-        formatted_time = self._format_timestamp(tx.get('blockTimestamp'))
-        # tx_id = tx.get('txid') or tx.get('transactionHash') or 'N/A' # Not used in output currently
+        block_timestamp = tx.get('blockTimestamp') # Получаем временную метку
+        formatted_time = self._format_timestamp(block_timestamp)
+        
+        # --- Assign or Generate Transaction ID ---
+        tx_id = tx.get('txid') or tx.get('transactionHash')
+        if not tx_id:
+            # Генерируем ID, если официальный отсутствует
+            try:
+                # Собираем строку из ключевых полей (используем repr для стабильного представления None)
+                hash_input = "|".join([
+                    repr(block_timestamp),
+                    repr(from_identifier),
+                    repr(to_identifier),
+                    repr(token_id),
+                    repr(raw_unit_value), # Используем сырое значение
+                    repr(chain)
+                ])
+                # Вычисляем SHA-256 хеш
+                hash_object = hashlib.sha256(hash_input.encode('utf-8'))
+                tx_id = f"arkham_client_generated:{hash_object.hexdigest()}"
+                logger.debug(f"Сгенерирован ID транзакции: {tx_id} для данных: {hash_input}")
+            except Exception as e:
+                logger.warning(f"Не удалось сгенерировать ID транзакции: {e}. Используется 'N/A'.")
+                tx_id = "N/A" # Возвращаемся к N/A в случае ошибки генерации
         
         # --- Assemble Processed Dictionary --- 
         processed = {
@@ -248,6 +272,7 @@ class DataProcessor:
             "_to_identifier": to_identifier,
             "_token_id": token_id,
             "USD_numeric": usd_numeric,
+            "_txid": tx_id, # Теперь содержит либо официальный ID, либо сгенерированный, либо N/A при ошибке генерации
             "_raw_data": tx # Include raw data if needed later
         }
         return processed
