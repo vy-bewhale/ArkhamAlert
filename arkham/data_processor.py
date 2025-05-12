@@ -67,9 +67,9 @@ class DataProcessor:
             return "N/A"
         try:
             usd_dec = Decimal(str(usd_value))
-            # Quantize to 2 decimal places for currency
-            formatted_usd = usd_dec.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            return "${:,.2f}".format(formatted_usd)
+            # Quantize to 0 decimal places (whole dollars)
+            formatted_usd = usd_dec.quantize(Decimal('1'), rounding=ROUND_HALF_UP) 
+            return "${:,.0f}".format(formatted_usd) # Format with no decimal places
         except (ValueError, TypeError, decimal_module.InvalidOperation) as e:
             logger.warning(f"Ошибка форматирования USD {usd_value}: {e}")
             return str(usd_value)
